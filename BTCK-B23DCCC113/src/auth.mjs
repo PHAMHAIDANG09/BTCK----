@@ -77,13 +77,12 @@ async function validateRegistration(req, res, next) {
 }
 
 // --- Middleware xác thực admin ---
-export function adminAuth(req, res, next) {
-  console.log('Admin auth middleware bypassed');
-  next();
-}
-
 export const isAdmin = (req, res, next) => {
-  console.log('isAdmin middleware bypassed');
+  // Tạm thời bỏ qua xác thực để test
+  req.user = {
+    role: 'schoolAdmin',
+    schoolId: 'NEU4'
+  };
   next();
 };
 

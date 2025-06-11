@@ -32,7 +32,8 @@ import {
     addUser,
     createSchoolAdmin,
     getSchoolAdmins,
-    getSchoolProfiles
+    getSchoolProfiles,
+    getSchoolStatisticsForAdmin
 } from '../../controllers/admin.controller.mjs';
 
 const router = express.Router();
@@ -96,5 +97,8 @@ router.get('/admission-rules/:schoolId/:majorId/:academicYear/:method', getAdmis
 
 // Thêm route mới đã có trong controller
 router.post('/process-admission-complete', processAdmissionComplete);
+
+// --- API THỐNG KÊ CHO ADMIN TRƯỜNG ---
+router.get('/schools/:schoolId/statistics', getSchoolStatisticsForAdmin);
 
 export { router }; 

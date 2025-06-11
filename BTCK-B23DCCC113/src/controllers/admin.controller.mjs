@@ -1309,3 +1309,131 @@ export const getSchoolProfiles = async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 };
+
+// --- THỐNG KÊ CHI TIẾT CHO ADMIN TRƯỜNG ---
+export const getSchoolStatisticsForAdmin = async (req, res) => {
+    try {
+        const { schoolId } = req.params;
+        const { academicYear } = req.query;
+
+        // Kiểm tra quyền truy cập
+        if (req.user.role !== 'schoolAdmin' || req.user.schoolId !== schoolId) {
+            return res.status(403).json({ message: 'Không có quyền truy cập thống kê của trường này' });
+        }
+
+        // 1. Thống kê tổng quan
+        const totalStats = await Profile.aggregate([
+            { $match: { truong: schoolId } },
+            { $group: {
+                _id: null,
+                totalProfiles: { $sum: 1 },
+                daDuyet: { $sum: { $cond: [{ $eq: ["$trangThai", "da_duyet"] }, 1, 0] } },
+                dangDuyet: { $sum: { $cond: [{ $eq: ["$trangThai", "dang_duyet"] }, 1, 0] } },
+                tuChoi: { $sum: { $cond: [{ $eq: ["$trangThai", "tu_choi"] }, 1, 0] } },
+                trungTuyen: { $sum: { $cond: [{ $eq: ["$trangThai", "trung_tuyen"] }, 1, 0] } }
+            }}
+        ]);
+
+        // 2. Thống kê theo ngành
+        const majorStats = await Profile.aggregate([
+            { $match: { truong: schoolId } },
+            { $group: {
+                _id: "$maNganh",
+                total: { $sum: 1 },
+                daDuyet: { $sum: { $cond: [{ $eq: ["$trangThai", "da_duyet"] }, 1, 0] } },
+                dangDuyet: { $sum: { $cond: [{ $eq: ["$trangThai", "dang_duyet"] }, 1, 0] } },
+                tuChoi: { $sum: { $cond: [{ $eq: ["$trangThai", "tu_choi"] }, 1, 0] } },
+                trungTuyen: { $sum: { $cond: [{ $eq: ["$trangThai", "trung_tuyen"] }, 1, 0] } }
+            }},
+            { $sort: { total: -1 } }
+        ]);
+
+        // 3. Thống kê theo phương thức xét tuyển
+        const methodStats = await Profile.aggregate([
+            { $match: { truong: schoolId } },
+            { $group: {
+                _id: "$phuongThuc",
+                total: { $sum: 1 },
+                daDuyet: { $sum: { $cond: [{ $eq: ["$trangThai", "da_duyet"] }, 1, 0] } },
+                dangDuyet: { $sum: { $cond: [{ $eq: ["$trangThai", "dang_duyet"] }, 1, 0] } },
+                tuChoi: { $sum: { $cond: [{ $eq: ["$trangThai", "tu_choi"] }, 1, 0] } },
+                trungTuyen: { $sum: { $cond: [{ $eq: ["$trangThai", "trung_tuyen"] }, 1, 0] } }
+            }},
+            { $sort: { total: -1 } }
+        ]);
+
+        // 4. Thống kê theo thời gian (7 ngày gần nhất)
+        const timeStats = await Profile.aggregate([
+            { $match: { truong: schoolId } },
+            { $group: {
+                _id: { 
+                    $dateToString: { 
+                        format: "%Y-%m-%d", 
+                        date: "$createdAt" 
+                    }
+                },
+                count: { $sum: 1 }
+            }},
+            { $sort: { _id: -1 } },
+            { $limit: 7 }
+        ]);
+
+        // 5. Lấy thông tin ngành học
+        const majors = await Major.find({ schoolId });
+        const majorMap = {};
+        majors.forEach(major => {
+            majorMap[major.id] = major.name;
+        });
+
+        // 6. Lấy chỉ tiêu của trường
+        const quotas = await AdmissionQuota.find({ schoolId });
+        const quotaMap = {};
+        quotas.forEach(quota => {
+            quotaMap[quota.majorId] = quota.totalQuota;
+        });
+
+        // Format dữ liệu trả về
+        const formattedMajorStats = majorStats.map(stat => ({
+            majorId: stat._id,
+            majorName: majorMap[stat._id] || stat._id,
+            total: stat.total,
+            daDuyet: stat.daDuyet,
+            dangDuyet: stat.dangDuyet,
+            tuChoi: stat.tuChoi,
+            trungTuyen: stat.trungTuyen,
+            quota: quotaMap[stat._id] || 0,
+            tiLeDangKy: quotaMap[stat._id] ? (stat.total / quotaMap[stat._id] * 100).toFixed(2) : 0
+        }));
+
+        const formattedMethodStats = methodStats.map(stat => ({
+            method: stat._id,
+            methodName: getMethodName(stat._id),
+            total: stat.total,
+            daDuyet: stat.daDuyet,
+            dangDuyet: stat.dangDuyet,
+            tuChoi: stat.tuChoi,
+            trungTuyen: stat.trungTuyen
+        }));
+
+        res.json({
+            overview: totalStats[0] || {
+                totalProfiles: 0,
+                daDuyet: 0,
+                dangDuyet: 0,
+                tuChoi: 0,
+                trungTuyen: 0
+            },
+            byMajor: formattedMajorStats,
+            byMethod: formattedMethodStats,
+            byTime: timeStats,
+            schoolInfo: {
+                id: schoolId,
+                name: (await School.findOne({ id: schoolId }))?.name || 'Không xác định'
+            }
+        });
+
+    } catch (error) {
+        console.error('Lỗi khi lấy thống kê:', error);
+        res.status(500).json({ message: error.message });
+    }
+};
