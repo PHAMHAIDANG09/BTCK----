@@ -1316,11 +1316,6 @@ export const getSchoolStatisticsForAdmin = async (req, res) => {
         const { schoolId } = req.params;
         const { academicYear } = req.query;
 
-        // Kiểm tra quyền truy cập
-        if (req.user.role !== 'schoolAdmin' || req.user.schoolId !== schoolId) {
-            return res.status(403).json({ message: 'Không có quyền truy cập thống kê của trường này' });
-        }
-
         // 1. Thống kê tổng quan
         const totalStats = await Profile.aggregate([
             { $match: { truong: schoolId } },
